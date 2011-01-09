@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>#{get 'title' /}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" type="text/css" media="screen" href="@{'/public/stylesheets/main.css'}">
+    #{get 'moreStyles' /}
+    <link rel="shortcut icon" type="image/png" href="@{'/public/images/favicon.png'}">
+    <script src="@{'/public/javascripts/jquery-1.4.2.min.js'}" type="text/javascript" charset="utf-8"></script>
+    #{get 'moreScripts' /}
+    <script>
+        var socket;
+
+        function openWebSocket() {
+            if (window.WebSocket) {
+                socket = new WebSocket('ws://127.0.0.1:9000/websocket');
+                socket.onopen = function(event) {
+                };
+                socket.onclose = function(event) {
+                };
+                socket.onmessage = function(event) {
+                    parse(event.data);
+                };
+
+                socket2 = new WebSocket('ws://127.0.0.1:9000/websocket2');
+                socket2.onopen = function(event) {
+                };
+                socket2.onclose = function(event) {
+                };
+                socket2.onmessage = function(event) {
+                    parse(event.data);
+                };
+            } else {
+                alert('Your browser does not support WebSockets yet.');
+            }
+        }
+
+        function closeWebSocket() {
+            socket.close();
+        }
+
+        function send(message) {
+            if (!window.WebSocket) {
+                return;
+            }
+            // OPEN
+            if (socket.readyState == 1) {
+                socket.send(message);
+            } else {
+                alert('The WebSocket is not open!');
+            }
+        }
+
+        function send2(message) {
+            if (!window.WebSocket) {
+                return;
+            }
+            // OPEN
+            if (socket.readyState == 1) {
+                socket2.send(message);
+            } else {
+                alert('The WebSocket is not open!');
+            }
+        }
+
+        function parse(response) {
+            // parse response: json or xml, etc
+            $('#out').append("<div>" + response + "</div>");
+        }
+
+    </script>
+</head>
+
+<body onload='openWebSocket()' onunload='closeWebSocket()'>
+#{doLayout /}
+</body>
+</html>

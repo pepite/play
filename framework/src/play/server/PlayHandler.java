@@ -89,7 +89,7 @@ public class PlayHandler extends SimpleChannelUpstreamHandler {
         Logger.trace("messageReceived: end");
     }
 
-    private static Map<String, RenderStatic> staticPathsCache = new HashMap<String, RenderStatic>();
+    protected static Map<String, RenderStatic> staticPathsCache = new HashMap<String, RenderStatic>();
 
     public class NettyInvocation extends Invoker.Invocation {
 

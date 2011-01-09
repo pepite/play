@@ -1,0 +1,10 @@
+#{extends 'main.html' /}
+#{set title:'Home' /}
+
+
+<div id='out'></div>
+<input id="a" type="text" name="message" value="Hello, World!"/>
+<input type="button" value="Send Web Socket Data" onclick="send(document.getElementById('a').value)"/>
+<input type="button" value="Says hi" onclick="send2('')"/>
+
+<!-- more html here -->

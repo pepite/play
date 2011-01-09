@@ -6,6 +6,7 @@ import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
 import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
 import org.jboss.netty.handler.stream.ChunkedWriteHandler;
 import play.Play;
+import play.server.websocket.WebSocketServerHandler;
 
 import static org.jboss.netty.channel.Channels.pipeline;
 
@@ -22,7 +23,7 @@ public class HttpServerPipelineFactory implements ChannelPipelineFactory {
         pipeline.addLast("encoder", new HttpResponseEncoder());
         pipeline.addLast("chunkedWriter", new ChunkedWriteHandler());
 
-        pipeline.addLast("handler", new PlayHandler());
+        pipeline.addLast("handler", new WebSocketServerHandler());
 
 
         return pipeline;
