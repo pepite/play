@@ -1,6 +1,5 @@
 package play.server.websocket;
 
-import org.apache.commons.io.IOUtils;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.*;
@@ -17,21 +16,20 @@ import play.Invoker;
 import play.Logger;
 import play.Play;
 import play.PlayPlugin;
-import play.classloading.enhancers.ControllersEnhancer;
 import play.exceptions.ActionNotFoundException;
-import play.mvc.ActionInvoker;
 import play.mvc.Http;
+import play.mvc.Notifier;
 import play.mvc.Router;
 import play.mvc.Scope;
-import play.mvc.results.NoResult;
 import play.mvc.results.NotFound;
-import play.mvc.results.Result;
+import play.notifiers.Broadcast;
+import play.notifiers.NoRender;
+import play.notifiers.Render;
 import play.server.PlayHandler;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.URLDecoder;
 import java.security.MessageDigest;
 import java.util.HashMap;
 
@@ -158,31 +156,25 @@ public class WebSocketServerHandler extends PlayHandler {
         HttpRequest nettyRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, WEBSOCKET_METHOD, "");
         try {
 
-            final Http.Response response = new Http.Response();
-            final Http.Request request = new Http.Request();
-            request.method = "WEBSOCKET";
-            request.path = map.get(ctx).path;
-            request.querystring = "";
+            Notifier.Inbound inbound = new Notifier.Inbound();
+            Notifier.Outbound outbound = new Notifier.Outbound();
+
+            inbound.path = map.get(ctx).path;
+            // Resolve action
+            Logger.trace("parseRequest: begin");
+            Logger.trace("parseRequest: URI = " + nettyRequest.getUri());
+
+            Router.Route route = Router.route(inbound);
+            inbound.action = route.action;
+
             if (frame.isText()) {
-                request.body = new ByteArrayInputStream(frame.getTextData().getBytes());
-            } else if (frame.isBinary())  {
-                request.body = new ByteArrayInputStream(frame.getBinaryData().array());
-                request.isLoopback = true;
+                inbound.content = frame.getTextData().getBytes();
+            } else if (frame.isBinary()) {
+                inbound.content = frame.getBinaryData().array();
             }
-            Http.Response.current.set(response);
-            response.out = new ByteArrayOutputStream();
-            boolean raw = false;
-            for (PlayPlugin plugin : Play.plugins) {
-                if (plugin.rawInvocation(request, response)) {
-                    raw = true;
-                    break;
-                }
-            }
-            if (raw) {
-                copyResponse(ctx, request, response, nettyRequest);
-            } else {
-                Invoker.invoke(new WebSocketInvocation(request, response, ctx, nettyRequest));
-            }
+            Notifier.Outbound.current.set(outbound);
+            // TODO: Add support for plugin?
+            Invoker.invoke(new WebSocketInvocation(inbound, outbound, ctx, nettyRequest));
 
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -194,15 +186,14 @@ public class WebSocketServerHandler extends PlayHandler {
     public class WebSocketInvocation extends Invoker.Invocation {
 
         private final ChannelHandlerContext ctx;
-        private final Http.Request request;
-        private final Http.Response response;
+        private final Notifier.Inbound inbound;
+        private final Notifier.Outbound outbound;
         private final HttpRequest nettyRequest;
-        private Broadcast broadcast;
 
-        public WebSocketInvocation(Http.Request request, Http.Response response, ChannelHandlerContext ctx, HttpRequest nettyRequest) {
+        public WebSocketInvocation(Notifier.Inbound inbound, Notifier.Outbound outbound, ChannelHandlerContext ctx, HttpRequest nettyRequest) {
             this.ctx = ctx;
-            this.request = request;
-            this.response = response;
+            this.inbound = inbound;
+            this.outbound = outbound;
             this.nettyRequest = nettyRequest;
         }
 
@@ -218,6 +209,7 @@ public class WebSocketServerHandler extends PlayHandler {
                 Logger.trace("run: begin");
                 super.run();
             } catch (Exception e) {
+                // TODO: Check this
                 serve500(e, ctx, nettyRequest);
             }
             Logger.trace("run: end");
@@ -235,66 +227,49 @@ public class WebSocketServerHandler extends PlayHandler {
             }
 
             try {
-                Http.Request.current.set(request);
-                Http.Response.current.set(response);
+                Notifier.Inbound.current.set(inbound);
+                Notifier.Outbound.current.set(outbound);
 
-                Scope.Params.current.set(request.params);
                 Scope.RenderArgs.current.set(new Scope.RenderArgs());
                 Scope.RouteArgs.current.set(new Scope.RouteArgs());
-                // 1. Route and resolve format if not already done
-                if (request.action == null) {
-                    for (PlayPlugin plugin : Play.plugins) {
-                        plugin.routeRequest(request);
-                    }
-                    Router.Route route = Router.route(request);
-                    for (PlayPlugin plugin : Play.plugins) {
-                        plugin.onRequestRouting(route);
-                    }
-                }
-                request.resolveFormat();
 
                 // 2. Find the action method
                 Method actionMethod = null;
                 try {
-                    Object[] ca = ActionInvoker.getActionMethod(request.action);
+                    Object[] ca = Notifier.getActionMethod(inbound.action);
                     actionMethod = (Method) ca[1];
-                    request.controller = ((Class) ca[0]).getName().substring(12).replace("$", "");
-                    request.controllerClass = ((Class) ca[0]);
-                    request.actionMethod = actionMethod.getName();
-                    request.action = request.controller + "." + request.actionMethod;
-                    request.invokedMethod = actionMethod;
-                    broadcast = actionMethod.getAnnotation(Broadcast.class);
+                    // notifiers.
+                    inbound.controller = ((Class) ca[0]).getName().replace("$", "");
+                    inbound.controllerClass = ((Class) ca[0]);
+                    inbound.actionMethod = actionMethod.getName();
+                    inbound.action = inbound.controller + "." + inbound.actionMethod;
+                    inbound.invokedMethod = actionMethod;
+                    inbound.broadcast = actionMethod.getAnnotation(Broadcast.class);
+                    Logger.info("action is [" + inbound.action + "]  controller [" + inbound.controller + "] broadcast [" + inbound.broadcast + "]");
                 } catch (ActionNotFoundException e) {
                     Logger.error(e, "%s action not found", e.getAction());
                     throw new NotFound(String.format("%s action not found", e.getAction()));
                 }
 
-                ControllersEnhancer.ControllerInstrumentation.stopActionCall();
+                //ControllersEnhancer.ControllerInstrumentation.stopActionCall();
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.beforeActionInvocation(actionMethod);
                 }
-                ControllersEnhancer.ControllerInstrumentation.initActionCall();
+                //ControllersEnhancer.ControllerInstrumentation.initActionCall();
 
-                if (request.isLoopback) {
-                    ActionInvoker.inferResult(actionMethod.invoke(null, IOUtils.toByteArray(request.body)));
-                } else {
-                    ActionInvoker.inferResult(actionMethod.invoke(null, IOUtils.toString(request.body)));
-                }
+                // string or byte[]?
+                Logger.info("content is [" + new String(inbound.content) + "]");
+                actionMethod.invoke(null, new String(inbound.content));
 
             } catch (InvocationTargetException ex) {
                 ex.printStackTrace();
                 // It's a Result ? (expected)
-                Result result = new NoResult();
-                if (ex.getTargetException() instanceof Result) {
-                    result = (Result) ex.getTargetException();
+                Render result = new NoRender();
+                if (ex.getTargetException() instanceof Render) {
+                    result = (Render) ex.getTargetException();
                 }
 
-                Logger.info("result " + result);
-                for (PlayPlugin plugin : Play.plugins) {
-                    plugin.onActionInvocationResult(result);
-                }
-
-                result.apply(request, response);
+                result.apply(inbound, outbound);
 
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.afterActionInvocation();
@@ -307,21 +282,21 @@ public class WebSocketServerHandler extends PlayHandler {
         public void onSuccess() throws Exception {
             super.onSuccess();
             // Loop over all the channels and determine which one
-            Logger.info("response is [" + new String(response.out.toByteArray()) + "]");
-            if (broadcast !=  null) {
+            Logger.info("response is [" + new String(outbound.content) + "]  broadcast [" + inbound.broadcast + "]");
+            if (inbound.broadcast != null) {
                 for (WebSocketChannel ws : map.values()) {
-                    if (ws.path.equals(request.path)) {
+                    if (ws.path.equals(inbound.path)) {
                         for (Channel c : ws.channels) {
-                            if (c != ctx.getChannel() && !broadcast.all()) {
-                                c.write(new DefaultWebSocketFrame(new String(response.out.toByteArray())));
-                            } else if (broadcast.all()) {
-                                c.write(new DefaultWebSocketFrame(new String(response.out.toByteArray())));
+                            if (c != ctx.getChannel() && !inbound.broadcast.all()) {
+                                c.write(new DefaultWebSocketFrame(new String(outbound.content)));
+                            } else if (inbound.broadcast.all()) {
+                                c.write(new DefaultWebSocketFrame(new String(outbound.content)));
                             }
                         }
                     }
                 }
             } else {
-                ctx.getChannel().write(new DefaultWebSocketFrame(new String(response.out.toByteArray())));
+                ctx.getChannel().write(new DefaultWebSocketFrame(new String(outbound.content)));
             }
         }
 

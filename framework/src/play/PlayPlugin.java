@@ -206,7 +206,7 @@ public abstract class PlayPlugin implements Comparable<PlayPlugin> {
     }
 
     /** 
-     * Dispatcher may be sent by plugins or other components
+     * Notifier may be sent by plugins or other components
      * @param message convention: pluginClassShortName.message
      * @param context depends on the plugin
      */

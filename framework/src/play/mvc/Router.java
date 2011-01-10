@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import jregex.Matcher;
 import jregex.Pattern;
 import jregex.REFlags;
@@ -206,7 +207,7 @@ public class Router {
 
     /**
      * In PROD mode and if the routes are already loaded, this does nothing.
-     *
+     * <p/>
      * <p>In DEV mode, this checks each routes file's "last modified" time to see if the routes need updated.
      *
      * @param prefix The prefix that the path of all routes in this route file start with. This prefix should not end with a '/' character.
@@ -287,6 +288,19 @@ public class Router {
         }
         throw new NotFound(request.method, request.path);
     }
+
+
+    public static Route route(Notifier.Inbound inbound) {
+        for (Route route : routes) {
+            Map<String, String> args = route.matches("WEBSOCKET", inbound.path);
+            if (args != null) {
+                return route;
+            }
+        }
+
+        throw new NotFound("WEBSOCKET", inbound.path);
+    }
+
 
     public static Map<String, String> route(String method, String path) {
         return route(method, path, null, null);
@@ -418,7 +432,7 @@ public class Router {
                             continue; // format is a special key
                         }
                         if (!args.containsKey(staticKey) || (args.get(staticKey) == null)
-                                        || !args.get(staticKey).toString().equals(route.staticArgs.get(staticKey))) {
+                                || !args.get(staticKey).toString().equals(route.staticArgs.get(staticKey))) {
                             allRequiredArgsAreHere = false;
                             break;
                         }
@@ -439,14 +453,14 @@ public class Router {
                                     List<Object> vals = (List<Object>) value;
                                     try {
                                         path = path.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(vals.get(0).toString().replace("$", "\\$"), "utf-8"));
-                                    } catch(UnsupportedEncodingException e) {
+                                    } catch (UnsupportedEncodingException e) {
                                         throw new UnexpectedException(e);
                                     }
                                 } else {
                                     try {
                                         path = path.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(value.toString().replace("$", "\\$"), "utf-8").replace("%3A", ":").replace("%40", "@"));
                                         host = host.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(value.toString().replace("$", "\\$"), "utf-8").replace("%3A", ":").replace("%40", "@"));
-                                    } catch(UnsupportedEncodingException e) {
+                                    } catch (UnsupportedEncodingException e) {
                                         throw new UnexpectedException(e);
                                     }
                                 }
@@ -738,9 +752,9 @@ public class Router {
          * Check if the parts of a HTTP request equal this Route.
          *
          * @param method GET/POST/etc.
-         * @param path Part after domain and before query-string. Starts with a "/".
+         * @param path   Part after domain and before query-string. Starts with a "/".
          * @param accept Format, e.g. html.
-         * @param host AKA the domain.
+         * @param host   AKA the domain.
          * @return ???
          */
         public Map<String, String> matches(String method, String path, String accept, String host) {

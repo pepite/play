@@ -2466,12 +2466,12 @@ jQuery.event = {
 
 	// bubbling is internal
 	trigger: function( event, data, elem, bubbling ) {
-		// Dispatcher object or event type
+		// Notifier object or event type
 		var type = event.type || event;
 
 		if( !bubbling ){
 			event = typeof event === "object" ?
-				// jQuery.Dispatcher object
+				// jQuery.Notifier object
 				event[expando] ? event :
 				// Object literal
 				jQuery.extend( jQuery.Event(type), event ) :
@@ -2677,12 +2677,12 @@ jQuery.Event = function( src ){
 	if( !this.preventDefault )
 		return new jQuery.Event(src);
 	
-	// Dispatcher object
+	// Notifier object
 	if( src && src.type ){
 		this.originalEvent = src;
 		this.type = src.type;
 		this.timeStamp = src.timeStamp;
-	// Dispatcher type
+	// Notifier type
 	}else
 		this.type = src;
 
@@ -2700,7 +2700,7 @@ function returnTrue(){
 	return true;
 }
 
-// jQuery.Dispatcher is based on DOM3 Events as specified by the ECMAScript Language Binding
+// jQuery.Notifier is based on DOM3 Events as specified by the ECMAScript Language Binding
 // http://www.w3.org/TR/2003/WD-DOM-Level-3-Events-20030331/ecma-script-binding.html
 jQuery.Event.prototype = {
 	preventDefault: function() {

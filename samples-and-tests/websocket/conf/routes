@@ -11,5 +11,5 @@ GET     /public/                                staticDir:public
 # Catch all
 *       /{controller}/{action}                  {controller}.{action}
 
-WEBSOCKET   /websocket                          Application.handleMessage
-WEBSOCKET   /{channel}                          Application.saysHi
+WEBSOCKET   /websocket                          Event.handleMessage
+WEBSOCKET   /{channel}                          Event.saysHi
