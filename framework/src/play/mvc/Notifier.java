@@ -1,6 +1,7 @@
 package play.mvc;
 
 import com.google.gson.Gson;
+import play.Logger;
 import play.Play;
 import play.classloading.enhancers.ControllersEnhancer;
 import play.classloading.enhancers.LocalvariablesNamesEnhancer;
@@ -61,10 +62,13 @@ public class Notifier {
     public static class Outbound {
 
         public Broadcast broadcast = null;
-        public byte[] content;
+        public byte[] content = new byte[0];
 
         public static ThreadLocal<Outbound> current = new ThreadLocal<Outbound>();
 
+        public static Outbound current() {
+            return current.get();
+        }
     }
 
     /**
@@ -202,33 +206,42 @@ public class Notifier {
 
     // TODO: Move somewhere else
     public static Object[] getActionMethod(String fullAction) {
+        Logger.info("getActionMethod: fullAction [" + fullAction + "]");
         Method actionMethod = null;
         Class controllerClass = null;
+        String fAction = fullAction;
         try {
             if (!fullAction.startsWith("notifiers.")) {
-                fullAction = "notifiers." + fullAction;
+                fAction = "notifiers." + fullAction;
             }
-            String controller = fullAction.substring(0, fullAction.lastIndexOf("."));
-            String action = fullAction.substring(fullAction.lastIndexOf(".") + 1);
+            String controller = fAction.substring(0, fAction.lastIndexOf("."));
+            String action = fAction.substring(fAction.lastIndexOf(".") + 1);
             controllerClass = Play.classloader.getClassIgnoreCase(controller);
+
+            if (controllerClass == null && !fullAction.startsWith("controllers.")) {
+                fAction = "controllers." + fullAction;
+                controller = fAction.substring(0, fAction.lastIndexOf("."));
+                action = fAction.substring(fAction.lastIndexOf(".") + 1);
+                controllerClass = Play.classloader.getClassIgnoreCase(controller);
+            }
             if (controllerClass == null) {
-                throw new ActionNotFoundException(fullAction, new Exception("Notifier " + controller + " not found"));
+                throw new ActionNotFoundException(fAction, new Exception("Notifier " + controller + " not found"));
             }
-            if (!Notifier.class.isAssignableFrom(controllerClass)) {
-                // Try the scala way
-                controllerClass = Play.classloader.getClassIgnoreCase(controller + "$");
-                if (!Notifier.class.isAssignableFrom(controllerClass)) {
-                    throw new ActionNotFoundException(fullAction, new Exception("class " + controller + " does not extend play.mvc.Notifier"));
-                }
-            }
+//            if (!Notifier.class.isAssignableFrom(controllerClass)) {
+//                // Try the scala way
+//                controllerClass = Play.classloader.getClassIgnoreCase(controller + "$");
+//                if (!Notifier.class.isAssignableFrom(controllerClass)) {
+//                    throw new ActionNotFoundException(fAction, new Exception("class " + controller + " does not extend play.mvc.Notifier"));
+//                }
+//            }
             actionMethod = Java.findActionMethod(action, controllerClass);
             if (actionMethod == null) {
-                throw new ActionNotFoundException(fullAction, new Exception("No method public static void " + action + "() was found in class " + controller));
+                throw new ActionNotFoundException(fAction, new Exception("No method public static void " + action + "() was found in class " + controller));
             }
         } catch (PlayException e) {
             throw e;
         } catch (Exception e) {
-            throw new ActionNotFoundException(fullAction, e);
+            throw new ActionNotFoundException(fAction, e);
         }
         return new Object[]{controllerClass, actionMethod};
     }

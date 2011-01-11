@@ -466,6 +466,8 @@ public class Controller implements ControllerSupport, LocalVariablesSupport {
         }
     }
 
+    public static boolean redirect = true;
+
     /**
      * Send a Redirect response.
      * @param url The Location to redirect
@@ -494,7 +496,7 @@ public class Controller implements ControllerSupport, LocalVariablesSupport {
      * @param args Method arguments
      */
     protected static void redirect(String action, boolean permanent, Object... args) {
-        try {
+          try {
             Map<String, Object> newArgs = new HashMap<String, Object>(args.length);
             Method actionMethod = (Method) ActionInvoker.getActionMethod(action)[1];
             String[] names = (String[]) actionMethod.getDeclaringClass().getDeclaredField("$" + actionMethod.getName() + LocalVariablesNamesTracer.computeMethodHash(actionMethod.getParameterTypes())).get(null);

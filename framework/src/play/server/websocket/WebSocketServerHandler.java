@@ -1,5 +1,6 @@
 package play.server.websocket;
 
+import javassist.CtMethod;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.*;
@@ -16,20 +17,22 @@ import play.Invoker;
 import play.Logger;
 import play.Play;
 import play.PlayPlugin;
+import play.classloading.enhancers.ControllersEnhancer;
 import play.exceptions.ActionNotFoundException;
-import play.mvc.Http;
-import play.mvc.Notifier;
-import play.mvc.Router;
-import play.mvc.Scope;
+import play.mvc.*;
 import play.mvc.results.NotFound;
+import play.mvc.results.Redirect;
+import play.mvc.results.Result;
 import play.notifiers.Broadcast;
 import play.notifiers.NoRender;
 import play.notifiers.Render;
 import play.server.PlayHandler;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.URLDecoder;
 import java.security.MessageDigest;
 import java.util.HashMap;
 
@@ -251,25 +254,42 @@ public class WebSocketServerHandler extends PlayHandler {
                     throw new NotFound(String.format("%s action not found", e.getAction()));
                 }
 
-                //ControllersEnhancer.ControllerInstrumentation.stopActionCall();
+                // ControllersEnhancer.ControllerInstrumentation.stopActionCall();
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.beforeActionInvocation(actionMethod);
                 }
-                //ControllersEnhancer.ControllerInstrumentation.initActionCall();
+                // ControllersEnhancer.ControllerInstrumentation.initActionCall();
 
                 // string or byte[]?
                 Logger.info("content is [" + new String(inbound.content) + "]");
+                // Make sure the method is embedded with @ByPass
+                Field f = inbound.controllerClass.getField("redirect");
+                f.setAccessible(true);
+                f.setBoolean(null, false);
                 actionMethod.invoke(null, new String(inbound.content));
+                f.setBoolean(null, true);
 
             } catch (InvocationTargetException ex) {
                 ex.printStackTrace();
                 // It's a Result ? (expected)
-                Render result = new NoRender();
                 if (ex.getTargetException() instanceof Render) {
-                    result = (Render) ex.getTargetException();
+                    Render result = (Render) ex.getTargetException();
+                    result.apply(inbound, outbound);
+                } else if (ex.getTargetException() instanceof Result) {
+                    Result result = (Result) ex.getTargetException();
+                    // Simulate request
+                    Http.Request request = new Http.Request();
+                    request.controller = inbound.controller;
+                    request.controllerClass = inbound.controllerClass;
+                    request.actionMethod = inbound.actionMethod;
+                    request.action = inbound.action;
+                    request.invokedMethod = inbound.invokedMethod;
+                    request.body = new ByteArrayInputStream(inbound.content);
+                    Http.Response response = new Http.Response();
+                    response.out = new ByteArrayOutputStream();
+                    if (!(result instanceof Redirect))
+                        result.apply(request, response);
                 }
-
-                result.apply(inbound, outbound);
 
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.afterActionInvocation();
@@ -297,6 +317,17 @@ public class WebSocketServerHandler extends PlayHandler {
                 }
             } else {
                 ctx.getChannel().write(new DefaultWebSocketFrame(new String(outbound.content)));
+            }
+        }
+
+    }
+
+    public static void write(String path, byte[] message) {
+        for (WebSocketChannel ws : map.values()) {
+            if (ws.path.equals(path)) {
+                for (Channel c : ws.channels) {
+                    c.write(new DefaultWebSocketFrame(new String(message)));
+                }
             }
         }
 
