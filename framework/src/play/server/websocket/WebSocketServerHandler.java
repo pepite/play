@@ -18,6 +18,7 @@ import play.Logger;
 import play.Play;
 import play.PlayPlugin;
 import play.classloading.enhancers.ControllersEnhancer;
+import play.classloading.enhancers.NotifiersEnhancer;
 import play.exceptions.ActionNotFoundException;
 import play.mvc.*;
 import play.mvc.results.NotFound;
@@ -51,7 +52,6 @@ public class WebSocketServerHandler extends PlayHandler {
     @Override
     public void channelDisconnected(
             ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
-        Logger.info("WebSocketServerHandler: channelDisconnected");
         map.get(ctx).channels.remove(e.getChannel());
     }
 
@@ -85,10 +85,6 @@ public class WebSocketServerHandler extends PlayHandler {
     }
 
     private boolean handleHttpRequest(ChannelHandlerContext ctx, HttpRequest req, MessageEvent e) throws Exception {
-        Logger.info("WebSocketServerHandler: handleHttpRequest");
-
-        // Serve the WebSocket handshake request.
-        // TODO: Check that we have a route?
         if (Values.UPGRADE.equalsIgnoreCase(req.getHeader(CONNECTION)) &&
                 WEBSOCKET.equalsIgnoreCase(req.getHeader(Names.UPGRADE))) {
 
@@ -154,8 +150,6 @@ public class WebSocketServerHandler extends PlayHandler {
     }
 
     private void handleWebSocketFrame(ChannelHandlerContext ctx, WebSocketFrame frame) {
-        Logger.info("WebSocketServerHandler: handleWebSocketFrame");
-
         HttpRequest nettyRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, WEBSOCKET_METHOD, "");
         try {
 
@@ -248,49 +242,31 @@ public class WebSocketServerHandler extends PlayHandler {
                     inbound.action = inbound.controller + "." + inbound.actionMethod;
                     inbound.invokedMethod = actionMethod;
                     inbound.broadcast = actionMethod.getAnnotation(Broadcast.class);
-                    Logger.info("action is [" + inbound.action + "]  controller [" + inbound.controller + "] broadcast [" + inbound.broadcast + "]");
                 } catch (ActionNotFoundException e) {
                     Logger.error(e, "%s action not found", e.getAction());
                     throw new NotFound(String.format("%s action not found", e.getAction()));
                 }
 
-                // ControllersEnhancer.ControllerInstrumentation.stopActionCall();
+                NotifiersEnhancer.NotifierInstrumentation.initActionCall();
+
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.beforeActionInvocation(actionMethod);
                 }
-                // ControllersEnhancer.ControllerInstrumentation.initActionCall();
 
                 // string or byte[]?
-                Logger.info("content is [" + new String(inbound.content) + "]");
-                // Make sure the method is embedded with @ByPass
-                Field f = inbound.controllerClass.getField("redirect");
-                f.setAccessible(true);
-                f.setBoolean(null, false);
-                actionMethod.invoke(null, new String(inbound.content));
-                f.setBoolean(null, true);
+                try {
+                    actionMethod.invoke(null, new String(inbound.content));
+                } finally{
+                    NotifiersEnhancer.NotifierInstrumentation.stopActionCall();
+                }
 
             } catch (InvocationTargetException ex) {
-                ex.printStackTrace();
                 // It's a Result ? (expected)
                 if (ex.getTargetException() instanceof Render) {
                     Render result = (Render) ex.getTargetException();
                     result.apply(inbound, outbound);
-                } else if (ex.getTargetException() instanceof Result) {
-                    Result result = (Result) ex.getTargetException();
-                    // Simulate request
-                    Http.Request request = new Http.Request();
-                    request.controller = inbound.controller;
-                    request.controllerClass = inbound.controllerClass;
-                    request.actionMethod = inbound.actionMethod;
-                    request.action = inbound.action;
-                    request.invokedMethod = inbound.invokedMethod;
-                    request.body = new ByteArrayInputStream(inbound.content);
-                    Http.Response response = new Http.Response();
-                    response.out = new ByteArrayOutputStream();
-                    if (!(result instanceof Redirect))
-                        result.apply(request, response);
                 }
-
+                // TODO:?
                 for (PlayPlugin plugin : Play.plugins) {
                     plugin.afterActionInvocation();
                 }
@@ -302,7 +278,7 @@ public class WebSocketServerHandler extends PlayHandler {
         public void onSuccess() throws Exception {
             super.onSuccess();
             // Loop over all the channels and determine which one
-            Logger.info("response is [" + new String(outbound.content) + "]  broadcast [" + inbound.broadcast + "]");
+            Logger.trace("response is [" + new String(outbound.content) + "]  broadcast [" + inbound.broadcast + "] map [" + map + "]") ;
             if (inbound.broadcast != null) {
                 for (WebSocketChannel ws : map.values()) {
                     if (ws.path.equals(inbound.path)) {

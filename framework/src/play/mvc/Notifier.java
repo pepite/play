@@ -3,7 +3,6 @@ package play.mvc;
 import com.google.gson.Gson;
 import play.Logger;
 import play.Play;
-import play.classloading.enhancers.ControllersEnhancer;
 import play.classloading.enhancers.LocalvariablesNamesEnhancer;
 import play.data.validation.Validation;
 import play.exceptions.ActionNotFoundException;
@@ -30,6 +29,8 @@ public class Notifier {
     protected static Inbound inbound = null;
 
     protected static Outbound outbound = null;
+
+    // TODO: renderArgs?
 
 
     public static class Inbound {
@@ -206,7 +207,6 @@ public class Notifier {
 
     // TODO: Move somewhere else
     public static Object[] getActionMethod(String fullAction) {
-        Logger.info("getActionMethod: fullAction [" + fullAction + "]");
         Method actionMethod = null;
         Class controllerClass = null;
         String fAction = fullAction;
@@ -218,6 +218,7 @@ public class Notifier {
             String action = fAction.substring(fAction.lastIndexOf(".") + 1);
             controllerClass = Play.classloader.getClassIgnoreCase(controller);
 
+            // TODO: Not sure we want controller after all
             if (controllerClass == null && !fullAction.startsWith("controllers.")) {
                 fAction = "controllers." + fullAction;
                 controller = fAction.substring(0, fAction.lastIndexOf("."));
@@ -227,13 +228,7 @@ public class Notifier {
             if (controllerClass == null) {
                 throw new ActionNotFoundException(fAction, new Exception("Notifier " + controller + " not found"));
             }
-//            if (!Notifier.class.isAssignableFrom(controllerClass)) {
-//                // Try the scala way
-//                controllerClass = Play.classloader.getClassIgnoreCase(controller + "$");
-//                if (!Notifier.class.isAssignableFrom(controllerClass)) {
-//                    throw new ActionNotFoundException(fAction, new Exception("class " + controller + " does not extend play.mvc.Notifier"));
-//                }
-//            }
+
             actionMethod = Java.findActionMethod(action, controllerClass);
             if (actionMethod == null) {
                 throw new ActionNotFoundException(fAction, new Exception("No method public static void " + action + "() was found in class " + controller));

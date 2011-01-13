@@ -84,7 +84,7 @@ public class ControllersEnhancer extends Enhancer {
 
                 try {
                     ctMethod.insertBefore(
-                        "System.err.println(\"redirect \" + play.mvc.Controller.redirect);if(play.mvc.Controller._currentReverse.get() != null && play.mvc.Controller.redirect) {"
+                        "if(play.mvc.Controller._currentReverse.get() != null) {"
                         + "play.mvc.Controller.redirect(\"" + ctClass.getName().replace("$", "") + "." + ctMethod.getName() + "\", $args);"
                         + generateValidReturnStatement(ctMethod.getReturnType())
                     + "}");
@@ -98,10 +98,10 @@ public class ControllersEnhancer extends Enhancer {
                 if (Modifier.isPublic(ctMethod.getModifiers()) && ((ctClass.getName().endsWith("$") && !ctMethod.getName().contains("$default$")) || (Modifier.isStatic(ctMethod.getModifiers()) && ctMethod.getReturnType().equals(CtClass.voidType))) && !isHandler) {
                     try {
                         ctMethod.insertBefore(
-                                "if(!play.classloading.enhancers.ControllersEnhancer.ControllerInstrumentation.isActionCallAllowed() && play.mvc.Controller.redirect) {"
+                                "if(!play.classloading.enhancers.ControllersEnhancer.ControllerInstrumentation.isActionCallAllowed()) {"
                                 + "play.mvc.Controller.redirect(\"" + ctClass.getName().replace("$", "") + "." + ctMethod.getName() + "\", $args);"
                                 + generateValidReturnStatement(ctMethod.getReturnType()) +  "}"
-                                  + "play.classloading.enhancers.ControllersEnhancer.ControllerInstrumentation.stopActionCall();");
+                                + "play.classloading.enhancers.ControllersEnhancer.ControllerInstrumentation.stopActionCall();");
                     } catch (Exception e) {
                         Logger.error(e, "Error in ControllersEnhancer. %s.%s has not been properly enhanced (autoredirect).", applicationClass.name, ctMethod.getName());
                         throw new UnexpectedException(e);

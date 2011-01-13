@@ -32,7 +32,7 @@ import play.utils.Default;
  */
 public class Router {
 
-    static Pattern routePattern = new Pattern("^({method}GET|POST|PUT|DELETE|OPTIONS|HEAD|WEBSOCKET|\\*)[(]?({headers}[^)]*)(\\))?\\s+({path}.*/[^\\s]*)\\s+({action}[^\\s(]+)({params}.+)?(\\s*)$");
+    static Pattern routePattern = new Pattern("^({method}GET|POST|PUT|DELETE|OPTIONS|HEAD|WEBSOCKETUP|WEBSOCKETDOWN|\\*)[(]?({headers}[^)]*)(\\))?\\s+({path}.*/[^\\s]*)\\s+({action}[^\\s(]+)({params}.+)?(\\s*)$");
     /**
      * Pattern used to locate a method override instruction in request.querystring
      */
@@ -292,7 +292,7 @@ public class Router {
 
     public static Route route(Notifier.Inbound inbound) {
         for (Route route : routes) {
-            Map<String, String> args = route.matches("WEBSOCKET", inbound.path);
+            Map<String, String> args = route.matches("WEBSOCKETUP", inbound.path);
             if (args != null) {
                 return route;
             }
@@ -393,6 +393,7 @@ public class Router {
             args = new HashMap<String, Object>(argsbackup);
             if (route.actionPattern != null) {
                 Matcher matcher = route.actionPattern.matcher(action);
+
                 if (matcher.matches()) {
                     for (String group : route.actionArgs) {
                         String v = matcher.group(group);

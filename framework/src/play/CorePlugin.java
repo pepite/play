@@ -11,17 +11,14 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import play.Play.Mode;
 import play.classloading.ApplicationClasses.ApplicationClass;
-import play.classloading.enhancers.ControllersEnhancer;
-import play.classloading.enhancers.Enhancer;
-import play.classloading.enhancers.LocalvariablesNamesEnhancer;
-import play.classloading.enhancers.MailerEnhancer;
-import play.classloading.enhancers.PropertiesEnhancer;
-import play.classloading.enhancers.SigEnhancer;
+import play.classloading.enhancers.*;
 import play.exceptions.UnexpectedException;
 import play.libs.Crypto;
 import play.mvc.Http.Header;
 import play.mvc.Http.Request;
 import play.mvc.Http.Response;
+
+import javax.xml.soap.Node;
 
 /**
  * Plugin used for core tasks
@@ -284,6 +281,7 @@ public class CorePlugin extends PlayPlugin {
             ControllersEnhancer.class,
             MailerEnhancer.class,
             PropertiesEnhancer.class,
+            NotifiersEnhancer.class,
             LocalvariablesNamesEnhancer.class
         };
         for (Class<?> enhancer : enhancers) {

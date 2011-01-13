@@ -11,7 +11,7 @@ import play.mvc.Notifier;
  */
 public class Render extends RuntimeException {
 
-    private byte[] content;
+    public byte[] content;
 
     public Render() {
         super();
